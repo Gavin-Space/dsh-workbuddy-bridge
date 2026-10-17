@@ -1,0 +1,360 @@
+/** Node-free constants and types shared by the Host and browser halves. */
+
+/** Plugin-owned status endpoint consumed by its browser half. */
+export const WORKBUDDY_STATUS_PATH = '/plugins/dsh-workbuddy-bridge/status'
+
+/**
+ * Plugin-owned probe control endpoint.
+ *
+ * Separate from the status route because it accepts writes: the status route's
+ * loopback Host/Origin guard protects against a DNS-rebinding *page*, which is
+ * not the same as authorizing a state-changing action. This route therefore
+ * also requires the in-memory key the browser half receives with the status
+ * document.
+ */
+export const WORKBUDDY_PROBE_PATH = '/plugins/dsh-workbuddy-bridge/probe'
+
+/**
+ * The international (WorkBuddy AI) variant's own pair of routes.
+ *
+ * Kept as separate constants rather than a computed suffix so both halves
+ * reference literal strings: the browser bundle and the host bundle are built
+ * independently, and a shared expression is one build-config drift away from
+ * the desk asking a route the host never mounted.
+ */
+export const WORKBUDDY_AI_STATUS_PATH = '/plugins/dsh-workbuddy-bridge/ai/status'
+export const WORKBUDDY_AI_PROBE_PATH = '/plugins/dsh-workbuddy-bridge/ai/probe'
+
+/**
+ * Plugin-owned per-message credit route.
+ *
+ * A read-only GET taking `?sessionId=…`, answering `messageId → credit` for one
+ * Session. It is its own route rather than a field of the status document
+ * because the two have different lifetimes: the status document is per
+ * *account* and is re-read when the account changes, while credit accounting
+ * is per *Session* and grows as messages are sent.
+ *
+ * **One route for both variants, on purpose.** The accounting is attributed to
+ * a DSH `messageId` before it is stored, and a message id belongs to one
+ * Session regardless of which provider served it — a conversation can switch
+ * between the two WorkBuddy products (or away from both) mid-thread. A route
+ * per variant would force the message row to know which provider answered a
+ * message *it is merely labelling*, and would strand every message whose turn
+ * ran under the other variant.
+ *
+ * No key is required: the route only reads what this plugin already observed on
+ * its own loopback stream, carries no credential material, and answers loopback
+ * requests through the same Host/Origin guard as the status route.
+ */
+export const WORKBUDDY_CREDIT_PATH = '/plugins/dsh-workbuddy-bridge/credit'
+
+/**
+ * The credit route's answer: one Session's per-message costs.
+ *
+ * `credits` is keyed by DSH `messageId` and is always present (an empty object
+ * when nothing is recorded), so the browser half reads one shape instead of
+ * distinguishing "no data yet" from "no costs".
+ *
+ * A message *absent* from `credits` means this plugin observed no cost for it —
+ * a message predating the feature, a stream that failed before its final frame,
+ * or an upstream answer that carried no `credit` field. It never means zero, so
+ * the row renders nothing rather than a confident `0`.
+ *
+ * Distinct from {@link WorkBuddyWebCredits}, which is the account's *remaining*
+ * balance for the card. This one is what individual messages *spent*.
+ */
+export interface WorkBuddyWebSessionCredits {
+  sessionId: string
+  credits: Readonly<Record<string, number>>
+}
+
+/**
+ * One reasoning model, described by what its thinking-level switch does now.
+ *
+ * Every field here describes the **switch**, not the detection that may have
+ * established it. The two are kept apart on purpose: a reader asking "why does
+ * this model offer no levels?" is asking about the switch, and "has it been
+ * probed?" is only ever the explanation, never the question.
+ */
+export interface WorkBuddyWebEffortModel {
+  id: string
+  name: string
+  /**
+   * The levels the model picker offers right now, in upstream order.
+   *
+   * **Empty means this model cannot switch thinking.** Both halves key on this
+   * one field — the picker offers exactly these spellings, and the composer's
+   * bulb is lit exactly when the list is non-empty — so "has levels" and "bulb
+   * lit" cannot drift apart.
+   */
+  efforts: readonly string[]
+  /**
+   * Where {@link efforts} came from.
+   *
+   * - `declared`: the upstream named the set, so the answer is already known.
+   * - `observed`: a local detection established it.
+   * - `none`: unknown, so the model has no switch until a detection runs.
+   */
+  source: 'declared' | 'observed' | 'none'
+  /**
+   * Whether a detection could change this row.
+   *
+   * False for a declared set — a declaration always wins, so a sweep would
+   * spend credit to learn nothing — and false for a model that does not reason.
+   * Deliberately **true** for a row already observed as `non-validating`: that
+   * verdict describes today's upstream and is worth re-testing later.
+   */
+  detectable: boolean
+  /** The recorded observation this account has for this model, when any. */
+  validation?: 'validating' | 'non-validating' | 'unknown'
+  /** When that observation was made, epoch ms. */
+  probedAt?: number
+}
+
+/**
+ * Probe section of the status document.
+ *
+ * One list, not a candidate list beside a result list. Both halves need "what
+ * can this model do", and splitting the answer in two is what let the composer
+ * and the settings card disagree about which models were worth showing at all.
+ */
+export interface WorkBuddyWebProbeSection {
+  /** Whether the user has authorized probing. */
+  consent: boolean
+  /** Whether a sweep is in flight right now. */
+  running: boolean
+  /**
+   * Every reasoning model this variant serves, in catalog order.
+   *
+   * Models that do not reason are absent: they offer no thinking level to
+   * switch, so neither the picker nor the bulb has anything to say about them.
+   */
+  models: readonly WorkBuddyWebEffortModel[]
+}
+
+/** Action requested from the probe control route. */
+export interface WorkBuddyProbeAction {
+  /**
+   * `probe` spends credit on one model; `clear` drops recorded observations;
+   * `refresh` re-reads the credential and re-fetches the model catalog;
+   * `set-model-visibility` hides or shows one model for the signed-in
+   * account's picker.
+   *
+   * All five are writes, which is why they share this route's in-memory key
+   * and loopback guards rather than the read-only status GET.
+   */
+  action: 'probe' | 'clear' | 'refresh' | 'set-model-visibility'
+  /** Target model id; required for `probe` and `set-model-visibility`. */
+  model?: string
+  /** Requested visibility for `set-model-visibility`. */
+  enabled?: boolean
+  /** Requested picker visibility for `set-model-visibility`. */
+  visible?: boolean
+  /**
+   * Expected account key for `set-model-visibility`: the `visibility.account`
+   * the card rendered its checkboxes from. The host refuses the write when the
+   * signed-in account has moved on, so a stale card can never land one
+   * account's toggle in another account's bucket.
+   */
+  account?: string
+}
+
+/**
+ * Model-visibility section of the status document (issue #36).
+ *
+ * Present only when an account with a stable user id is signed in: the
+ * preferences are per account, so a credential without a uid has nothing to
+ * key them by and the card renders no visibility controls rather than editing
+ * a bucket every uid-less account would share. The account key is the same
+ * non-secret `uid:enterpriseId` identity the saved catalogs use — never a
+ * token.
+ */
+export interface WorkBuddyWebVisibilitySection {
+  /** The `uid:enterpriseId` identity these preferences belong to. */
+  account: string
+  /** Model ids this account has hidden from the picker (the full list, including ids not in the current catalog). */
+  hidden: readonly string[]
+}
+
+/**
+ * Where the models a card is currently showing came from.
+ *
+ * The plan requires the card to distinguish a live catalog from the built-in
+ * fallback, and to say when the last attempt failed — otherwise a stale list is
+ * indistinguishable from an offline one, and a user cannot tell whether the
+ * models they see still match the upstream.
+ */
+export interface WorkBuddyWebCatalog {
+  /**
+   * Where the models on screen came from, in degradation order:
+   * `live` (fetched now) → `saved` (this account's last successful fetch,
+   * restored after a restart or a failed fetch) → `fallback` (the roster
+   * compiled into the plugin). The card distinguishes them because "stale" and
+   * "offline with a saved list" are different situations for the user.
+   */
+  source: 'live' | 'saved' | 'fallback'
+  /** When the live catalog last succeeded, epoch ms. */
+  fetchedAt?: number
+  /** App version used as the catalog User-Agent, when the variant needed one. */
+  appVersion?: string
+  /** Why the most recent fetch failed, when it did, redacted for display. */
+  error?: string
+}
+
+/** One billing package and its remaining credit. */
+export interface WorkBuddyWebCreditAccount {
+  packageName: string
+  remain: number
+  size: number
+  unlimited?: true
+}
+
+/** Aggregated credit answer rendered by the plugin card. */
+export interface WorkBuddyWebCredits {
+  total: number
+  accounts: readonly WorkBuddyWebCreditAccount[]
+  unlimited?: true
+  cycleResetTime?: string
+}
+
+/** Billing convenience facts for one model, rendered as card badges. */
+export interface WorkBuddyWebModelBadge {
+  id: string
+  name: string
+  /** Whether the model is currently free (`x0.00` credits). */
+  free?: boolean
+  /** Promotional badges, e.g. `限时免费`, `夜间折扣`. */
+  badges?: readonly string[]
+  /**
+   * Credits multiplier in display form, e.g. `x0.79`. Unlike the model
+   * picker's copy, the card renders through the browser locale, so this value
+   * may be interpolated into a localized sentence rather than shown bare.
+   */
+  credits?: string
+  /**
+   * The rate cannot be stated right now, and the card must say so.
+   *
+   * Set for a row whose price came from a promotion that has since ended: the
+   * upstream bakes the discounted value into the cached row, and the original
+   * price is not recoverable from it, so neither the old figure nor `free` may
+   * be repeated. The card renders "refresh to see the price" instead.
+   */
+  rateUnknown?: true
+  /**
+   * Context capacity in tokens, taken verbatim from the upstream
+   * `maxAllowedSize`/`maxInputTokens`, or from the international document's
+   * `contextWindow.defaultLength` when it declares one.
+   *
+   * The international card can opt into the largest declared alternative. The
+   * selected value is what DSH receives as its actual context budget.
+   */
+  contextWindow?: number
+  /** The upstream default, when the card currently uses a selected maximum. */
+  defaultContextWindow?: number
+  /**
+   * The international document's larger selectable window, when it declares
+   * one, and the model's maximum input ceiling.
+   *
+   * Kept apart from {@link contextWindow} because they answer different
+   * questions: `contextWindow` is the budget the plugin actually requests under,
+   * while these are facts about what the upstream will accept. Showing the 1M
+   * ceiling as though it were the working window would overstate the budget.
+   */
+  maxContextWindow?: number
+  maxInputTokens?: number
+}
+
+/**
+ * Why no credential is usable, as a closed enum the browser half switches on.
+ *
+ * Deliberately separate from `reason`: `reason` is free text meant for a human
+ * to read, so matching on it would break the moment the wording changes. This
+ * is the machine-readable half, and the card uses it — never a substring of
+ * `reason` — to decide whether the Agent assist block applies.
+ */
+export type WorkBuddySignedOutReasonCode =
+  /** Nobody is signed in; nothing diagnosable beyond that. */
+  | 'no-credential'
+  /** A credential for the *other* product was found in this variant's file. */
+  | 'credential-region-mismatch'
+  /** An encrypted credential exists but could not be opened (wrong key, GCM failure, helper crash). */
+  | 'encrypted-credential-unreadable'
+  /** CN/macOS: discovery ran to completion and produced no usable candidate. */
+  | 'electron-binary-not-found'
+  /** CN/macOS: discovery found more than one distinct usable app. */
+  | 'electron-binary-ambiguous'
+  /** No auto-discovery for this product/platform and no explicit path configured. */
+  | 'electron-binary-unavailable'
+  /** An explicit path (option or env) is set but missing or not executable. */
+  | 'electron-path-invalid'
+  /** Discovery could not finish: tool missing, timeout, output overflow, unreadable plist. */
+  | 'electron-discovery-incomplete'
+
+/** Every reason code, for validation without trusting a wire value. */
+const SIGNED_OUT_REASON_CODES: readonly WorkBuddySignedOutReasonCode[] = [
+  'no-credential',
+  'credential-region-mismatch',
+  'encrypted-credential-unreadable',
+  'electron-binary-not-found',
+  'electron-binary-ambiguous',
+  'electron-binary-unavailable',
+  'electron-path-invalid',
+  'electron-discovery-incomplete',
+]
+
+/** Whether a value is one of the closed set of signed-out reason codes. */
+export function isWorkBuddySignedOutReasonCode(
+  value: unknown,
+): value is WorkBuddySignedOutReasonCode {
+  return typeof value === 'string' && (SIGNED_OUT_REASON_CODES as readonly string[]).includes(value)
+}
+
+/** The JSON document the plugin card renders. */
+export type WorkBuddyWebStatus =
+  | {
+      status: 'signed-out'
+      /**
+       * Why no credential is usable, when that is diagnosable rather than simply
+       * "nobody signed in" — today a credential belonging to the other product.
+       * The card renders it in place of the generic sign-in hint.
+       */
+      reason?: string
+      /** Machine-readable companion to `reason`; see {@link WorkBuddySignedOutReasonCode}. */
+      reasonCode?: WorkBuddySignedOutReasonCode
+    }
+  | {
+      status: 'signed-in'
+      nickname?: string
+      /**
+       * The account's own id (`account.uid`), when the credential carries one.
+       *
+       * The card names the account with `nickname ?? uid`: the desktop document is
+       * the only source of a nickname and it does not always have one, while the
+       * uid is what the per-account state (hidden models, probe records) is keyed
+       * by — so it is the one identifier that is always there to distinguish two
+       * accounts. Non-secret; `src/credential/store.ts` says why.
+       */
+      uid?: string
+      domain?: string
+      source?: 'desktop' | 'dsh'
+      expiresAt?: number
+      credits?: WorkBuddyWebCredits
+      creditsError?: string
+      /** Billing convenience facts for the models the plugin serves. */
+      models?: readonly WorkBuddyWebModelBadge[]
+      /** Where those models came from, and whether the last fetch failed. */
+      catalog?: WorkBuddyWebCatalog
+      /** Reasoning-effort probe state, consent, and recorded observations. */
+      probe?: WorkBuddyWebProbeSection
+      /** International-card preference selecting larger declared context windows. */
+      useMaximumContextWindow?: boolean
+      /** Per-account hidden-model state for the card's visibility controls. */
+      visibility?: WorkBuddyWebVisibilitySection
+      /**
+       * In-memory key authorizing probe control writes. Handed to the card with
+       * the status document (the card is same-origin and already had to pass the
+       * loopback guard); it is never persisted and is minted fresh on each run.
+       */
+      probeKey?: string
+    }
+  | { status: 'error'; message: string }

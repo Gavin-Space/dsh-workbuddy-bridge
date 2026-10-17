@@ -1,0 +1,23 @@
+# 本机工具资产（个人，不入库）
+.local/
+
+# 依赖
+node_modules/
+
+# 构建产物：本仓**提交** lib/。
+#
+# 上游仓不跟踪 lib/、每次发布自己跑 build；本仓的目标不同——它是个人 GitHub
+# 仓库，用途是 `dsh plugin add github:<owner>/<repo>` 直接装，所以产物必须入库，
+# 否则 clone 下来缺 lib/index.js（package.json 的 main）而无法加载。
+# 改源码后请 `pnpm build` 并一并提交 lib/，否则仓库里的产物会落后于 src/。
+
+# 测试与覆盖率
+coverage/
+
+# 日志与系统文件
+*.log
+.DS_Store
+
+# 原仓工具残留（本仓不使用）
+.mimosa/
+.zcode/

@@ -1,0 +1,190 @@
+/* The composer's reasoning-level control: one icon button, plus the bubble
+   anchored above it.
+
+   Every colour is a --dsw-alias-* token and the artwork strokes currentColor,
+   so light and dark themes follow from the button's colour alone. There is no
+   [data-ds-dark-theme] selector and no literal colour here — the host's own
+   sidebar buttons are built the same way. */
+
+.wrapper {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+}
+
+/* Geometry copied value-for-value from the host sidebar's .iconButton, via
+   dsh-ds-balance's popover button (which cites
+   packages/client/ui-sidebar/src/client/SidebarRoot.module.css). 28px circle,
+   transparent until hover: it reads as a peer of the host's own composer
+   chrome rather than as a labelled toolbar item. */
+.trigger {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  /* A true circle, the same opt-out the host's Switch uses for its capsule
+     (`corner-shape: round` over the global superellipse). */
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* No spin, no pulse: while a probe runs the icon simply stays the bulb it was.
+   The running state is carried by `aria-busy` (screen readers), the dimmed token
+   below (the control is disabled), and the panel's own "detecting…" label — a
+   rotating glyph said the same thing louder and, at 28px, read as a glitch. */
+
+/* A disabled control still has to be findable and legible: the host dims by
+   token rather than by opacity, so the icon keeps its contrast on both themes.
+   `--dsw-alias-label-dimmed` is the host's own dimmed label token —
+   `--dsw-alias-label-quaternary` does not exist and would silently do nothing. */
+.trigger:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* Focus rings come from the host's own tokens, the way every official control
+   draws them — a hard-coded 2px brand outline is a visibly different ring from
+   the one the rest of the chrome shows. */
+.trigger:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* ---- The popover ------------------------------------------------------- */
+
+/* Skin copied from the host's stat dialog via `dsh-ds-balance`'s balance
+   popover. Two layers, and the split is load-bearing:
+
+   ① The fill and the frosted filter must be written **together**
+      (`--dsw-specific-menu` + `--dsw-menu-backdrop-filter`). The host requires
+      the pair for any translucent menu surface; fill alone is "translucent but
+      not frosted". The host's own gate only scans the host's packages, so a
+      plugin that writes one without the other is never told.
+   ② They must not sit on `.panel` itself: a non-`none` `backdrop-filter` makes
+      an element the containing block for its fixed descendants, and this panel
+      holds non-portal `Tooltip` bubbles — their viewport coordinates would be
+      reinterpreted as offsets from this box and the bubbles would leave the
+      screen. `isolation: isolate` keeps the `z-index: -1` layer inside this
+      panel's own stacking context. */
+.panel {
+  position: fixed;
+  isolation: isolate;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: min(280px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  /* The host's hint tier, so the panel's copy matches the page behind it. */
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}
+
+.panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  content: '';
+  pointer-events: none;
+}
+
+/* Title row: the glyph, the model it belongs to, and a close button. Naming the
+   model matters here — the popover is portalled to the body and can sit far from
+   the control, so it has to say which model it is talking about. */
+/* The label tier the host uses for a form label: 13/1.5, weight 500, primary
+   ink. The panel's body copy sits a step below it. */
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.panelTitleIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.panelTitleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one line between the title and what it has to say. */
+.titleRule {
+  margin: 8px 0 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* The two lines that answer the question the panel exists for: what does this
+   model accept? A quiet caption over the answer, the way the host labels a
+   field it asks the user to read rather than fill in. */
+.levelsLabel {
+  margin: 0 0 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The answer itself: primary ink, so it reads as the value and not as more
+   commentary. It is also the panel's live region, which is why the pending and
+   empty wordings land in exactly this line. */
+.levels {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The hint tier: the cost of the action, and the two outcomes that need a
+   sentence rather than a value. */
+.note,
+.dim {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* An outcome that is not a value sits tight under the answer it explains. */
+.dim {
+  margin-top: 2px;
+}
+
+.panelActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

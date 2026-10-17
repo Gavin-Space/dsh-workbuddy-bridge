@@ -1,0 +1,663 @@
+/**
+ * The card's three panels and the Agent assist block.
+ *
+ * Every control here is an official primitive (`Tag`, `Checkbox`, `Button`,
+ * `Pill`), so the panels inherit the host theme and keyboard behaviour without
+ * this plugin shipping a single hand-built widget.
+ */
+
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Button, Checkbox, Tag, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatNumber, formatPercent, formatTime, formatTokens } from './format.ts'
+import { Field, Part } from './field.tsx'
+import type { WorkBuddyLocaleKey, WorkBuddyTranslate } from './locales.ts'
+import type { WorkBuddyCardVariant } from './variants.ts'
+import type {
+  WorkBuddySignedOutReasonCode,
+  WorkBuddyWebCatalog,
+  WorkBuddyWebCredits,
+  WorkBuddyWebModelBadge,
+  WorkBuddyWebProbeSection,
+  WorkBuddyWebVisibilitySection,
+} from '../shared/paths.ts'
+import css from './workbuddy.module.css'
+
+/**
+ * The reason codes whose failures the Agent assist block covers: the plugin
+ * cannot reach a decryption program, for any of the five reasons the host
+ * reports.
+ *
+ * This is the *only* place the card decides whether the block applies. It
+ * branches on the code, never on `reason` text: the prose is written for a
+ * human and is expected to change, so matching it would silently stop matching
+ * after any wording edit.
+ *
+ * `encrypted-credential-unreadable` is deliberately absent — the app was found
+ * and ran, so "look for the app" is not the fix for it.
+ */
+const ASSIST_REASON_CODES: readonly WorkBuddySignedOutReasonCode[] = [
+  'electron-binary-not-found',
+  'electron-binary-ambiguous',
+  'electron-binary-unavailable',
+  'electron-path-invalid',
+  'electron-discovery-incomplete',
+]
+
+/** Whether a reason code is one the assist block covers. */
+export function assistCodeFor(
+  reasonCode: WorkBuddySignedOutReasonCode | undefined,
+): WorkBuddySignedOutReasonCode | undefined {
+  return reasonCode !== undefined && ASSIST_REASON_CODES.includes(reasonCode)
+    ? reasonCode
+    : undefined
+}
+
+/** Locale key for one failure's summary inside the Agent prompt. */
+function assistSummaryKey(
+  code: WorkBuddySignedOutReasonCode,
+  variant: WorkBuddyCardVariant,
+): WorkBuddyLocaleKey {
+  switch (code) {
+    case 'electron-binary-not-found':
+      return 'assistNotFound'
+    case 'electron-binary-ambiguous':
+      return 'assistAmbiguous'
+    case 'electron-discovery-incomplete':
+      return 'assistIncomplete'
+    case 'electron-path-invalid':
+      return 'assistPathInvalid'
+    default:
+      return variant.unavailableKey
+  }
+}
+
+/**
+ * Localize an upstream promotional badge label, with an unknown-badge fallback.
+ *
+ * The CN catalog spells badges in Chinese (`限时免费`, `夜间折扣`); the
+ * international document carries English (`Free now`). Both are mapped so the
+ * same promotion reads consistently in either UI language, and anything else
+ * passes through verbatim — an unrecognized badge is still information the
+ * upstream chose to show.
+ */
+function badgeLabel(badge: string, t: WorkBuddyTranslate): string {
+  if (badge === '限时免费') return t('badgeLimitedFree')
+  if (badge === '夜间折扣') return t('badgeNightDiscount')
+  if (badge === 'Free now') return t('badgeFreeNow')
+  return badge
+}
+
+/**
+ * Where the model list on screen came from — the source, as a value.
+ *
+ * Lives here rather than in the card header: the answer describes the state of
+ * the catalog, and the catalog is this panel's subject. It sat in the account
+ * block only because that block had room, which made a fact about the model list
+ * read as a fact about the account.
+ *
+ * Only the source. The moment it was read is a *dynamic* value and is rendered
+ * as its own element beside this one — an interpolated sentence would carry a
+ * localized date whose length changes with the locale, and the label above it
+ * would have to move to keep up.
+ */
+function catalogSourceText(catalog: WorkBuddyWebCatalog, t: WorkBuddyTranslate): string {
+  if (catalog.source === 'live') return t('catalogSourceLive')
+  return catalog.source === 'saved' ? t('catalogSourceSaved') : t('catalogSourceFallback')
+}
+
+/** One model's promotional badges, plus `Free` when the upstream says so. */
+function ModelBadges({
+  model,
+  t,
+}: {
+  model: WorkBuddyWebModelBadge
+  t: WorkBuddyTranslate
+}): ReactNode {
+  return (
+    <span className={css.badges}>
+      {model.badges?.map((badge) => (
+        <Tag key={badge} tone="success">
+          {badgeLabel(badge, t)}
+        </Tag>
+      ))}
+      {model.free === true ? <Tag tone="success">{t('freeModel')}</Tag> : null}
+    </span>
+  )
+}
+
+/**
+ * One billing package as a labelled progress bar.
+ *
+ * A package whose allowance the upstream never reported (`size` not positive)
+ * has no percentage to state. It must not fall back to 100%: the plugin would
+ * be claiming a full quota it knows nothing about, which is the opposite of the
+ * honest "remaining N" line printed below it. Unknown size therefore renders the
+ * percent slot as unknown copy and an unfilled, indeterminate track.
+ */
+function CreditBar({
+  label,
+  remain,
+  size,
+  unlimited,
+  t,
+}: {
+  label: string
+  remain: number
+  size: number
+  unlimited?: true | undefined
+  t: WorkBuddyTranslate
+}): ReactNode {
+  const quota = t('unlimitedQuota')
+  if (unlimited === true) {
+    return (
+      <div className={css.package}>
+        <div className={css.packageLabel}>
+          <span className={css.caption}>{label}</span>
+          <span className={css.figure}>{quota}</span>
+        </div>
+        {/*
+         * "Uncapped" is not "100% remaining", so the range attributes are
+         * omitted and no fill is drawn: an uncapped quota has no proportion
+         * to state, and a full bar would assert one.
+         */}
+        <div className={css.track} role="progressbar" aria-label={label} aria-valuetext={quota} />
+      </div>
+    )
+  }
+  const sizeKnown = size > 0
+  const percent = sizeKnown ? (remain / size) * 100 : undefined
+  /*
+   * One reading, on the right, with both forms in it.
+   *
+   * They used to be two: the percentage on the right of the label row and the
+   * exact figure in a grey line under the bar. That is one fact stated twice in
+   * two places, and it reads as two numbers until the reader compares them — the
+   * maintainer asked for them combined on the right (2026-10-03). They belong
+   * together anyway: a percentage alone cannot be quoted to support, and a
+   * fraction without its percent asks the reader to do the division the bar is
+   * already drawing.
+   *
+   * The label takes the grey tier and the reading the value tier — the same two
+   * rules the card's field rows use, so a list row and a field row are one object.
+   */
+  const reading =
+    percent === undefined
+      ? t('creditPackageUnknownSize', { remain: formatNumber(remain) })
+      : t('packageRemaining', {
+          remain: formatNumber(remain),
+          size: formatNumber(size),
+          percent: formatPercent(percent),
+        })
+  return (
+    <div className={css.package}>
+      <div className={css.packageLabel}>
+        <span className={css.caption}>{label}</span>
+        <span className={css.figure}>{reading}</span>
+      </div>
+      {/*
+       * No numeric value when the size is unknown: the range attributes are
+       * omitted so assistive technology reports an indeterminate bar rather
+       * than a second, louder repeat of the false 100%.
+       */}
+      <div
+        className={css.track}
+        role="progressbar"
+        aria-label={label}
+        {...(percent === undefined
+          ? { 'aria-valuetext': reading }
+          : { 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': percent })}
+      >
+        {percent === undefined ? null : (
+          <div className={css.fill} style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The per-package credit breakdown, under the card's own "Credits" tab.
+ *
+ * Rendered into the **same scroll container the other two panels use**. It
+ * originally rendered straight into the panel with no container at all, so while
+ * the models and detection tabs were capped at 280px this one grew to whatever
+ * the account had — 11 packages on the maintainer's account, roughly three times
+ * the height of the other two tabs (2026-10-02). Switching tabs resized the card
+ * and only this tab had no scrollbar; now all three are one geometry.
+ */
+export function CreditsPanel({
+  credits,
+  t,
+}: {
+  credits: WorkBuddyWebCredits
+  t: WorkBuddyTranslate
+}): ReactNode {
+  // Skip the packages that say nothing: an exhausted non-enterprise package is
+  // noise once the total is on screen.
+  const shown = credits.accounts.filter(
+    (account) =>
+      account.packageName === 'enterprise' || account.remain > 0 || account.unlimited === true,
+  )
+  // Nothing to list means no box: an empty bordered container reads as a failure
+  // to load rather than as "this account has one package and the total above is
+  // all of it".
+  if (shown.length === 0) return null
+  return (
+    <div className={css.list}>
+      {shown.map((account, index) => (
+        <CreditBar
+          key={`${account.packageName}-${String(index)}`}
+          label={
+            account.packageName === 'enterprise' ? t('packageEnterprise') : account.packageName
+          }
+          remain={account.remain}
+          size={account.size}
+          unlimited={account.unlimited}
+          t={t}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The model catalog: one row per model, visibility checkbox on the left,
+ * context window, rate and badges on the right.
+ *
+ * The list is driven by the full current catalog, not by context metadata:
+ * hiding a model is a statement about the picker, and a model without a
+ * declared window is still hideable — its row just shows an em dash where the
+ * capacity would be. Rows with a window keep the original ordering (largest
+ * first); rows without one trail at the end in catalog order.
+ *
+ * Purely a report of the upstream's own numbers. The plugin offers no tier
+ * picker: the CN catalog declares one capacity per model and publishes no
+ * alternatives, so a menu there would mean inventing client-side policy. The
+ * international document does declare alternatives, and they are shown as a
+ * secondary figure rather than merged into one number — the default is the
+ * budget actually requested, while the larger value is a ceiling the upstream
+ * would accept.
+ */
+export function ModelsPanel({
+  models,
+  visibility,
+  toggling,
+  disabled,
+  catalog,
+  onToggle,
+  t,
+}: {
+  models: readonly WorkBuddyWebModelBadge[] | undefined
+  /** Per-account hidden-model state; undefined renders no checkboxes. */
+  visibility: WorkBuddyWebVisibilitySection | undefined
+  /** The models whose visibility writes are in flight; only those rows lock. */
+  toggling: ReadonlySet<string>
+  /** Whether every control is locked while another card action runs. */
+  disabled: boolean
+  /**
+   * Where this list came from, and when.
+   *
+   * It belongs to *this* panel rather than to the card header: the line
+   * describes the state of the model list, and the model list is here. It used
+   * to sit in the account block because that block was the only place with room
+   * — which made a fact about the catalog read as a fact about the account.
+   */
+  catalog: WorkBuddyWebCatalog | undefined
+  onToggle: (modelId: string, visible: boolean, account: string) => void
+  t: WorkBuddyTranslate
+}): ReactNode {
+  const rows = [...(models ?? [])].sort((a, b) => {
+    // Largest first, the ordering this table has always used; rows without a
+    // declared window trail at the end, keeping catalog order within the group
+    // (Array#sort is stable).
+    if (a.contextWindow === undefined) return b.contextWindow === undefined ? 0 : 1
+    if (b.contextWindow === undefined) return -1
+    return b.contextWindow - a.contextWindow
+  })
+  const hidden = new Set(visibility?.hidden ?? [])
+  /*
+   * A fragment, not a wrapper: the tab panel owns the layout (fixed height, one
+   * scroll region), so this panel's contributions have to be its *direct*
+   * children for `flex: 1` on the list to mean anything. A wrapper `<div>` here
+   * would become the flex item instead, and the list inside it would never fill.
+   */
+  return (
+    <>
+      {/*
+       * The catalog's provenance: where the list came from, and when it was read.
+       * No button — the card's own refresh does both halves of this, and a second
+       * button named "refresh" that re-fetched upstream while the other one only
+       * re-read was what made the card's actions feel arbitrary.
+       */}
+      {catalog === undefined ? null : (
+        <Field
+          main={<Part caption={t('catalogSourceFrom')}>{catalogSourceText(catalog, t)}</Part>}
+          note={
+            catalog.fetchedAt === undefined ? undefined : (
+              <Part caption={t('catalogUpdatedAt')}>{formatTime(catalog.fetchedAt)}</Part>
+            )
+          }
+        />
+      )}
+      {catalog?.error === undefined ? null : (
+        <p className={css.error}>{t('catalogError', { message: catalog.error })}</p>
+      )}
+      {rows.length === 0 ? null : (
+        <div className={css.list}>
+          {/*
+           * What the checkboxes mean, as the list's own header line rather than
+           * a paragraph between two blocks. Two reasons it belongs here:
+           * a bare checkbox column reads as *selection*, not visibility, so the
+           * line is the list's legend; and as a sibling it floated between the
+           * provenance row and the list at `13px` — larger than the `12px`
+           * metadata inside the very list it describes, which inverted the
+           * hierarchy it was trying to establish.
+           */}
+          {visibility === undefined ? null : (
+            <p className={css.listHeader}>{t('visibilityIntro')}</p>
+          )}
+          {rows.map((model) => {
+            const capacity = model.contextWindow
+            // Only shown when the upstream declared a larger alternative, so the
+            // CN list (which declares none) is unchanged.
+            const alternative =
+              capacity !== undefined &&
+              model.maxContextWindow !== undefined &&
+              model.maxContextWindow > capacity
+                ? model.maxContextWindow
+                : undefined
+            return (
+              <div key={model.id} className={css.modelRow}>
+                <span className={css.modelMain}>
+                  {/* The checkbox owns the name: it is one control whose label is the
+                  model, exactly the shape the host's Checkbox is built for. Splitting
+                  the name out of it would read as two objects and double the label. */}
+                  {visibility === undefined ? (
+                    <span className={css.name}>{model.name}</span>
+                  ) : (
+                    <Checkbox
+                      checked={!hidden.has(model.id)}
+                      disabled={disabled || toggling.has(model.id)}
+                      label={model.name}
+                      /* The primitive's own type is 14px; this page's names are
+                         13px. Without this the SAME row would render at two
+                         sizes depending on whether checkboxes are shown — the
+                         `.name` branch above is 13px. */
+                      className={css.modelCheck}
+                      onChange={(visible) => {
+                        onToggle(model.id, visible, visibility.account)
+                      }}
+                    />
+                  )}
+                </span>
+                <span className={css.modelEnd}>
+                  {model.credits === undefined ? (
+                    // No rate to show. When the plugin withheld it because the price
+                    // came from an ended promotion, say so plainly rather than showing
+                    // nothing — silence here reads as "free", which is the claim being
+                    // avoided.
+                    model.rateUnknown === true ? (
+                      <span className={css.dim}>{t('rateUnknown')}</span>
+                    ) : null
+                  ) : (
+                    <span className={css.dim}>{t('rate', { rate: model.credits })}</span>
+                  )}
+                  {capacity === undefined ? (
+                    <span className={css.meta} aria-label={t('contextUnknown')}>
+                      —
+                    </span>
+                  ) : (
+                    <span>{formatTokens(capacity)}</span>
+                  )}
+                  {alternative !== undefined ? (
+                    <span className={css.dim}>
+                      {t('contextUpTo', { size: formatTokens(alternative) })}
+                    </span>
+                  ) : capacity !== undefined &&
+                    model.defaultContextWindow !== undefined &&
+                    model.defaultContextWindow < capacity ? (
+                    <span className={css.dim}>
+                      {t('contextDefault', { size: formatTokens(model.defaultContextWindow) })}
+                    </span>
+                  ) : null}
+                  <span className={css.badges}>
+                    <ModelBadges model={model} t={t} />
+                  </span>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * Reasoning levels: one row per reasoning model, and what its switch does.
+ *
+ * Three deliberate UX rules:
+ * - **The list covers every reasoning model, not just the detectable ones.**
+ *   Showing only the detectable rows was what made the panel unable to answer
+ *   "why does this model have no levels?" — the models whose answer was already
+ *   known were exactly the ones missing from the list;
+ * - **one press detects.** The row states the current answer and the button
+ *   beside it runs the check; the cost is stated once, above the list, instead
+ *   of being asked again per row. A confirmation whose only other option is
+ *   "cancel" costs a click and answers nothing;
+ * - **a settled row says so.** A declared set cannot be improved by detecting,
+ *   so its button names that instead of offering a run that would spend credit
+ *   to learn nothing.
+ *
+ * A `non-validating` result is presented as an observation about the parameter
+ * ("this model does not check it"), never as a statement that a level is
+ * unsupported.
+ *
+ * The tab bar owns the heading, so this panel renders no heading of its own.
+ */
+export function ProbePanel({
+  probe,
+  models,
+  busy,
+  onDetect,
+  onClear,
+  t,
+}: {
+  probe: WorkBuddyWebProbeSection
+  /** Catalog rows from the same status document, for candidate display names. */
+  models: readonly WorkBuddyWebModelBadge[] | undefined
+  busy: boolean
+  onDetect: (modelId: string) => void
+  onClear: () => void
+  t: WorkBuddyTranslate
+}): ReactNode {
+  // Which model this card last asked to detect. `busy` alone cannot answer
+  // that — it is true for any in-flight request — so the running label needs
+  // the id, otherwise every candidate button claims to be running at once.
+  const [runningModel, setRunningModel] = useState<string>()
+  // Clear the running label once the request settles.
+  //
+  // Keyed on `busy` alone this would fire immediately: the click that starts a
+  // detection sets `runningModel` and `busy` in one batch, and an effect that
+  // only checks `!busy` can still observe the pre-update value. So the label is
+  // armed on the way up and released only after the run has been seen in flight.
+  const armed = useRef(false)
+  useEffect(() => {
+    if (runningModel === undefined) return
+    if (busy || probe.running) {
+      armed.current = true
+      return
+    }
+    if (!armed.current) return
+    armed.current = false
+    setRunningModel(undefined)
+  }, [runningModel, busy, probe.running])
+
+  if (probe.models.length === 0) return <p className={css.text}>{t('probeResultEmpty')}</p>
+
+  const detected = probe.models.filter((entry) => entry.probedAt !== undefined)
+
+  /*
+   * A fragment, not a wrapper: the tab panel owns the layout (fixed height, one
+   * scroll region), so the field row and the list have to be its *direct*
+   * children for `flex: 1` on the list to mean anything.
+   */
+  return (
+    <>
+      {/*
+       * The panel's own field row: the count, the cost of a run, and the one
+       * control this panel owns on the first line's right edge.
+       *
+       * `清除结果` stays here while the card's refresh moved out, because the two
+       * are different verbs: refreshing re-reads, clearing *deletes* recorded
+       * observations. It is the only action in the card that destroys something,
+       * so it belongs beside the count that says how much there is to destroy.
+       *
+       * The button used to sit in a right-aligned row *below* the list, which read
+       * as an orphan — the only thing under a bordered box, with nothing on screen
+       * saying what it clears.
+       */}
+      <Field
+        main={
+          detected.length === 0 ? (
+            <Part caption={t('probeDetectedNone')} />
+          ) : (
+            <Part caption={t('probeDetectedCaption')} after={t('probeDetectedUnit')}>
+              {detected.length}
+            </Part>
+          )
+        }
+        note={<Part caption={t('probeCostNote')} />}
+        action={
+          detected.length === 0 ? undefined : (
+            <Button size="sm" disabled={busy} onClick={onClear}>
+              {t('probeClear')}
+            </Button>
+          )
+        }
+      />
+      {/*
+       * One row per reasoning model, each carrying its own state and button.
+       * Buttons used to live in a block above the results, so a detected model
+       * left the button list and reappeared only as a result below — re-running
+       * it meant clearing every other result. Rows keep the model and its
+       * action together, so nothing moves when a detection lands.
+       */}
+      <div className={css.list}>
+        {/* Why this list holds models that need no detection: without it, a row
+            whose button is inert looks broken rather than settled. */}
+        <p className={css.listHeader}>{t('probeListIntro')}</p>
+        {probe.models.map((entry) => {
+          const id = entry.id
+          // Display name: the catalog's own label first, then the model id.
+          const name = models?.find((model) => model.id === id)?.name ?? entry.name ?? id
+          const hasLevels = entry.efforts.length > 0
+          return (
+            <div key={id} className={css.modelStack}>
+              <div className={css.probeRow}>
+                <span className={css.name}>{name}</span>
+                <span className={css.probeEnd}>
+                  <Tag tone={hasLevels ? 'success' : 'neutral'}>
+                    {hasLevels
+                      ? entry.efforts.join(' / ')
+                      : t(
+                          entry.detectable
+                            ? entry.validation === 'non-validating'
+                              ? 'probeResultNotValidating'
+                              : 'probeResultUnknown'
+                            : 'probeResultDeclaredNone',
+                        )}
+                  </Tag>
+                  <Button
+                    size="sm"
+                    disabled={busy || probe.running || !entry.detectable}
+                    onClick={() => {
+                      setRunningModel(id)
+                      onDetect(id)
+                    }}
+                  >
+                    {/* Only the button that was pressed reports progress; the
+                      card-wide `busy` flag cannot pick the label. */}
+                    {runningModel === id && entry.detectable
+                      ? t('probeRunning', { model: name })
+                      : !entry.detectable
+                        ? t('probeActionDeclared')
+                        : t(entry.probedAt === undefined ? 'probeStart' : 'probeRedetect')}
+                  </Button>
+                </span>
+              </div>
+              {entry.probedAt === undefined ? null : (
+                <span className={css.meta}>
+                  {t('probeResultAt', { time: formatTime(entry.probedAt) })}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+/**
+ * The Agent assist block for a path failure: what is wrong, one copyable
+ * request, and a re-check. Rendered only for the codes the host can do
+ * something about.
+ */
+export function AssistBlock({
+  variant,
+  code,
+  busy,
+  onRecheck,
+  t,
+}: {
+  variant: WorkBuddyCardVariant
+  code: WorkBuddySignedOutReasonCode
+  busy: boolean
+  onRecheck: () => void
+  t: WorkBuddyTranslate
+}): ReactNode {
+  const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
+  const prompt = t('assistantPrompt', {
+    appName: variant.appName,
+    failureSummary: t(assistSummaryKey(code, variant)),
+  })
+  return (
+    <div className={css.assist}>
+      <h4 className={css.title}>{t('assistantHeading')}</h4>
+      <p className={css.text}>{t('assistantIntro')}</p>
+      <div className={css.promptRow}>
+        {/* Selectable on purpose: a failed clipboard write must still leave the
+            user a way to copy the text by hand. */}
+        <p className={css.prompt}>{prompt}</p>
+        <Button
+          size="sm"
+          onClick={() => {
+            void writeClipboard(prompt).then((ok) => {
+              setCopied(ok)
+              setCopyFailed(!ok)
+            })
+          }}
+        >
+          {t('assistantCopy')}
+        </Button>
+      </div>
+      {/* `role="status"` so the copy result is announced, not just shown. */}
+      {copied ? (
+        <p className={css.dim} role="status">
+          {t('assistantCopied')}
+        </p>
+      ) : null}
+      {copyFailed ? (
+        <p className={css.dim} role="status">
+          {t('assistantCopyFailed')}
+        </p>
+      ) : null}
+      <p className={css.text}>{t('assistantAfter')}</p>
+      <Button size="sm" disabled={busy} onClick={onRecheck}>
+        {busy ? t('assistantRechecking') : t('assistantRecheck')}
+      </Button>
+    </div>
+  )
+}

@@ -1,0 +1,461 @@
+/** The plugin's dictionary: one key union, two bundles, no ad-hoc objects. */
+
+import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+
+/** Every copy key the browser half renders. */
+export type WorkBuddyLocaleKey =
+  // Card frame
+  | 'title'
+  | 'intro'
+  | 'titleAI'
+  // Account state
+  | 'loading'
+  | 'signedOut'
+  | 'signedOutHint'
+  | 'signedOutHintAI'
+  | 'signedIn'
+  | 'signedInLabel'
+  /*
+   * Static words, rendered at the grey tier as their own elements beside the
+   * dynamic values they frame — never interpolated together. See the `Field` /
+   * `Part` pair in field.tsx for why.
+   */
+  | 'sessionExpiryLabel'
+
+  // Read failures
+  | 'requestFailed'
+  | 'statusRefreshFailed'
+  | 'statusResponseInvalid'
+  // Catalog provenance: a caption, the source it frames, and the moment
+  | 'catalogSourceFrom'
+  | 'catalogSourceLive'
+  | 'catalogSourceSaved'
+  | 'catalogSourceFallback'
+  | 'catalogUpdatedAt'
+  | 'catalogError'
+  // The card's one action, and the panel's own
+  | 'refreshAll'
+  | 'refreshingAll'
+  // Tabs
+  | 'tabLabel'
+  | 'tabCredits'
+  | 'tabModels'
+  | 'tabProbe'
+  // Credit
+  | 'creditsTotalUnlimitedValue'
+  | 'unlimitedQuota'
+  | 'packageEnterprise'
+  | 'packageRemaining'
+  | 'creditPackageUnknownSize'
+  | 'creditsError'
+  // Per-message and beside-the-picker credit. The verbs differ from the card's
+  // "合计"（remaining total）on purpose: these two figures describe opposite
+  // directions of one ledger and must not read as the same number.
+  | 'creditConsumed'
+  | 'creditConsumedTitle'
+  | 'creditRemainingUnlimited'
+  | 'creditBalanceTitle'
+  // Model offers
+  | 'freeModel'
+  | 'badgeLimitedFree'
+  | 'badgeNightDiscount'
+  | 'badgeFreeNow'
+  | 'rate'
+  | 'rateUnknown'
+  // Model list
+  | 'contextUpTo'
+  | 'contextDefault'
+  | 'contextUnknown'
+  | 'visibilityIntro'
+  | 'visibilityStaleAccount'
+  // Reasoning-effort detection (card tab)
+  | 'probeDetectedCaption'
+  | 'probeDetectedUnit'
+  | 'probeDetectedNone'
+  | 'probeListIntro'
+  | 'probeCostNote'
+  | 'probeStart'
+  | 'probeRedetect'
+  | 'probeRunning'
+  | 'probeClear'
+  | 'probeResultNotValidating'
+  | 'probeResultUnknown'
+  | 'probeResultDeclaredNone'
+  | 'probeResultAt'
+  | 'probeResultEmpty'
+  | 'probeActionDeclared'
+  // The composer control's own panel. Unlike the card, it has one action and no
+  // confirmation step: the panel explains, the button acts.
+  | 'probePanelLevels'
+  | 'probePanelNoLevels'
+  | 'probePanelNote'
+  | 'probePanelDetect'
+  | 'probePanelDetecting'
+  | 'probePanelRedetect'
+  | 'probePanelNotNeeded'
+  | 'probePanelNotValidating'
+  | 'probePanelDeclaredNone'
+  | 'probePanelFailed'
+  // Panel boundary
+  | 'panelCrashed'
+  | 'panelRetry'
+  | 'probeLabel'
+  | 'probeTooltipIdle'
+  | 'probeTooltipRunning'
+  | 'probeTooltipLevels'
+  | 'probeTooltipDeclared'
+  | 'probeTooltipNotValidating'
+  | 'probeTooltipFailed'
+  // Settings form
+  | 'authFile'
+  | 'authFileHint'
+  | 'authFileAI'
+  | 'authFileAIHint'
+  | 'probeConsent'
+  | 'probeConsentHint'
+  | 'maximumContextWindow'
+  | 'maximumContextWindowHint'
+  | 'overridden'
+  | 'reset'
+  | 'readOnly'
+  | 'unavailable'
+  | 'save'
+  | 'saving'
+  | 'saveFailed'
+  // Agent assist
+  | 'assistantHeading'
+  | 'assistantIntro'
+  | 'assistantCopy'
+  | 'assistantCopied'
+  | 'assistantCopyFailed'
+  | 'assistantAfter'
+  | 'assistantRecheck'
+  | 'assistantRechecking'
+  | 'assistantPrompt'
+  | 'assistNotFound'
+  | 'assistAmbiguous'
+  | 'assistIncomplete'
+  | 'assistPathInvalid'
+  | 'assistUnavailableCN'
+  | 'assistUnavailableAI'
+
+/** English copy. */
+export const en: Record<WorkBuddyLocaleKey, string> = {
+  title: 'WorkBuddy (CN)',
+  intro: 'Follows the sign-in of the WorkBuddy desktop app and serves its models here.',
+  titleAI: 'WorkBuddy AI (Global)',
+  loading: 'Loading account…',
+  signedOut: 'Not signed in',
+  signedOutHint:
+    'Sign in once in the WorkBuddy desktop app; this plugin follows that sign-in automatically.',
+  signedOutHintAI:
+    'Sign in once in the WorkBuddy AI desktop app; this plugin follows that sign-in automatically.',
+  signedIn: 'Signed in',
+  /*
+   * The account block: a grey caption and the identity it frames, as two
+   * elements. `signedInLabel` is the caption used when there is an identity to
+   * show; `signedIn` is the whole line when there is none. Neither interpolates —
+   * the value is rendered beside them, not inside them.
+   */
+  signedInLabel: 'Signed in as',
+  /* The expiry's caption; the timestamp is its own element. */
+  sessionExpiryLabel: 'Expires',
+
+  requestFailed: 'Request failed',
+  statusRefreshFailed: 'Refresh failed: {message} — showing the last known state',
+  statusResponseInvalid: 'WorkBuddy returned an unreadable status reply',
+  /*
+   * Catalog provenance: a caption, the source it frames, and the moment the list
+   * was read. Three elements rather than one sentence, so a long localized date
+   * cannot pull the sentence it used to sit inside out of shape.
+   */
+  catalogSourceFrom: 'From',
+  catalogSourceLive: 'the app',
+  catalogSourceSaved: 'a saved copy',
+  catalogSourceFallback: 'the built-in list',
+  catalogUpdatedAt: 'Updated',
+  catalogError: 'Last update failed: {message}',
+  /*
+   * The card's one action. Labelled for its scope, not its mechanism: it re-reads
+   * the status document *and* has the host re-fetch the catalog, so a bare
+   * "Refresh" beside one block would understate it — and two buttons named
+   * "refresh" that did different things is what this replaces.
+   */
+  refreshAll: 'Refresh all',
+  refreshingAll: 'Refreshing…',
+  tabLabel: 'WorkBuddy detail',
+  tabCredits: 'Credits',
+  tabModels: 'Models',
+  tabProbe: 'Detection',
+  creditsTotalUnlimitedValue: 'Unlimited',
+  unlimitedQuota: 'Unlimited',
+  packageEnterprise: 'Enterprise quota',
+  /* One package's reading: both forms in one string, because they are one fact. */
+  packageRemaining: '{remain} / {size} left ({percent}%)',
+
+  creditPackageUnknownSize: '{remain} remaining',
+  creditsError: 'Credit unavailable: {message}',
+  creditConsumed: 'Used {credit}',
+  creditConsumedTitle: 'Credit this message consumed, as reported by WorkBuddy',
+  /*
+   * No `creditRemaining` wording on purpose. The composer readout is a coin
+   * glyph followed by the bare figure — at 28px a sentence competes with the
+   * number it labels, and the glyph says what the number is. The full sentence
+   * lives in `creditBalanceTitle` below, which is what hovering reveals.
+   */
+  creditRemainingUnlimited: 'Unlimited',
+  creditBalanceTitle: 'Remaining credit on your {product} account',
+  freeModel: 'Free',
+  badgeLimitedFree: 'Limited-time free',
+  badgeNightDiscount: 'Night discount',
+  badgeFreeNow: 'Free for now',
+  rate: '{rate} credits per message',
+  rateUnknown: 'Price unavailable — refresh to update',
+  contextUpTo: 'up to {size}',
+  contextDefault: 'default {size}',
+  contextUnknown: 'no declared context window',
+  visibilityIntro:
+    'Uncheck a model to hide it from the picker. The choice is saved per signed-in account; chats already using a hidden model keep working.',
+  visibilityStaleAccount: 'The signed-in account changed — this change was not saved.',
+  /*
+   * The detection panel's copy, split by what each line is for.
+   *
+   * It used to be one key carrying two sentences, rendered as a paragraph above
+   * the list — so the sentence explaining the *list* and the sentence explaining
+   * the *cost* were welded together, and the pair sat against the list's border
+   * with nothing separating them. Three homes now:
+   */
+  /*
+   * The count line: a grey caption, the number, and a trailing unit. The unit is
+   * empty in English on purpose — "Detected 7" needs no noun, while "1 models"
+   * would, and a plural branch is not worth a word the reader infers anyway.
+   */
+  probeDetectedCaption: 'Detected',
+  probeDetectedUnit: '',
+  probeDetectedNone: 'Nothing detected yet',
+  /** Why the list contains models that need no detection — the list's own header. */
+  probeListIntro: 'Some models reason but declare no selectable effort levels.',
+  /** What a run costs — the explanation belonging to the action. */
+  probeCostNote:
+    'Detecting sends a few real requests to one model and may consume a small amount of credit.',
+  probeStart: 'Detect',
+  probeRedetect: 'Detect again',
+  probeRunning: 'Detecting {model}…',
+  probeClear: 'Clear results',
+  probeResultNotValidating: 'This model does not check the effort parameter',
+  probeResultUnknown: 'Not detected yet',
+  probeResultDeclaredNone: 'The provider declares no levels',
+  probeResultAt: 'Detected {time}',
+  probeResultEmpty: 'No reasoning models are being served right now.',
+  probeActionDeclared: 'Declared',
+  probeLabel: 'Reasoning levels',
+  probePanelLevels: 'Supported levels',
+  probePanelNoLevels: 'No level can be selected',
+  probePanelNote:
+    'Detection sends a few requests to this model and may consume a small amount of credit.',
+  probePanelDetect: 'Detect',
+  probePanelDetecting: 'Detecting…',
+  probePanelRedetect: 'Detect again',
+  probePanelNotNeeded: 'Already declared — nothing to detect',
+  probePanelNotValidating: 'This model does not check the effort parameter.',
+  probePanelDeclaredNone: 'This model declares no selectable levels.',
+  probePanelFailed: 'Detection did not finish. You can run it again.',
+  /*
+   * Panel boundary copy. `{panel}` names the block that broke, so the fallback
+   * replaces only what it can describe: "the detection list stopped working" is
+   * actionable, "something went wrong" is not.
+   */
+  panelCrashed: 'The {panel} section stopped working.',
+  panelRetry: 'Try again',
+  probeTooltipIdle: 'This model offers no levels yet — click to detect them',
+  probeTooltipRunning: 'Detecting…',
+  probeTooltipLevels: 'Detected levels: {levels}',
+  probeTooltipDeclared: 'Levels declared by the provider: {levels}',
+  probeTooltipNotValidating: 'This model ignores the reasoning-level parameter',
+  probeTooltipFailed: 'Detection did not finish · click to run it again',
+  authFile: 'WorkBuddy auth file',
+  authFileHint:
+    'Path to the WorkBuddy desktop auth file. Leave blank to use the app’s own location.',
+  authFileAI: 'WorkBuddy AI auth file',
+  authFileAIHint:
+    'Path to the WorkBuddy AI desktop auth file. Leave blank to use the app’s own location.',
+  probeConsent: 'Allow reasoning-effort detection',
+  probeConsentHint:
+    'Lets the plugin send test requests to a model to confirm which effort levels it accepts; each detection may consume a small amount of credit.',
+  maximumContextWindow: 'Use the largest declared context window',
+  maximumContextWindowHint: 'Applies to WorkBuddy AI models that offer a larger window.',
+  overridden: 'Overridden',
+  reset: 'Reset to default',
+  readOnly: 'This deployment stores settings read-only.',
+  unavailable: 'This plugin is not loaded, so it cannot be configured right now.',
+  save: 'Save',
+  saving: 'Saving…',
+  saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
+  assistantHeading: 'Let an Agent sort this out',
+  assistantIntro:
+    'Send the request below to your Agent; it will check the app location and the launch configuration for you.',
+  assistantCopy: 'Copy for Agent',
+  assistantCopied: 'Copied',
+  assistantCopyFailed: 'Copy failed — select the text above and copy it manually',
+  assistantAfter:
+    'When your Agent is done, come back and check again. If the DSH launch environment was changed, restart DSH first as instructed.',
+  assistantRecheck: 'Done — check again',
+  assistantRechecking: 'Checking…',
+  // The prompt is a request to the user's Agent, not a promise by this plugin:
+  // it must not name a specific env var (the right fix depends on how DSH was
+  // launched) and must not claim a search happened.
+  assistantPrompt:
+    "DSH's dsh-workbuddy-bridge cannot use my {appName}: {failureSummary}. Please check the actual installation location and any existing path configuration, help the plugin use it correctly, and verify recovery. If the DSH launch environment must be changed or DSH restarted, give me clear steps; do not only set an environment variable temporarily in the current shell.",
+  // Per-code summaries. `unavailable*` says only that nothing is configured —
+  // never that a search was performed, because on those paths none was.
+  assistNotFound: 'no usable decryption program was found',
+  assistAmbiguous: 'more than one WorkBuddy copy was found and none could be chosen safely',
+  assistIncomplete: 'the automatic search could not be completed',
+  assistPathInvalid: 'the configured program path is not usable',
+  assistUnavailableCN: 'no decryption program is configured for this platform',
+  assistUnavailableAI: 'no decryption program is configured for WorkBuddy AI',
+}
+
+/** Simplified Chinese copy. */
+export const zh: Record<WorkBuddyLocaleKey, string> = {
+  title: 'WorkBuddy（国内版）',
+  intro: '跟随 WorkBuddy 桌面 App 的登录状态，在此直接使用它的模型。',
+  titleAI: 'WorkBuddy AI（国际版）',
+  loading: '正在读取账号…',
+  signedOut: '未登录',
+  signedOutHint: '在 WorkBuddy 桌面 App 里登录一次即可，插件会自动跟随当前登录的账号。',
+  signedOutHintAI: '在 WorkBuddy AI 国际版桌面 App 里登录一次即可，插件会自动跟随当前登录的账号。',
+  signedIn: '已登录',
+  signedInLabel: '已登录',
+  sessionExpiryLabel: '有效期至',
+
+  catalogSourceFrom: '来自',
+  catalogSourceLive: '客户端实时读取',
+  catalogSourceSaved: '已保存的副本',
+  catalogSourceFallback: '内置列表',
+  catalogUpdatedAt: '更新于',
+  requestFailed: '请求失败',
+  statusRefreshFailed: '刷新失败：{message} — 当前显示的是上次成功获取的状态',
+  statusResponseInvalid: 'WorkBuddy 返回的状态数据无法识别',
+  catalogError: '上次更新失败：{message}',
+  refreshAll: '刷新全部',
+  refreshingAll: '正在刷新…',
+  tabLabel: 'WorkBuddy 详情',
+  tabCredits: '积分',
+  tabModels: '模型',
+  tabProbe: '检测',
+  creditsTotalUnlimitedValue: '不限额',
+  unlimitedQuota: '不限额',
+  packageEnterprise: '企业额度',
+  packageRemaining: '剩余 {remain} / {size}（{percent}%）',
+
+  creditPackageUnknownSize: '剩余 {remain}',
+  creditsError: '积分查询失败：{message}',
+  creditConsumed: '共消耗 {credit}',
+  creditConsumedTitle: '本条消息消耗的积分（由 WorkBuddy 返回）',
+  /* 见英文侧的说明：composer 那处只有图标 + 数字，说明文字在 title 里。 */
+  creditRemainingUnlimited: '不限额',
+  creditBalanceTitle: '{product} 账号剩余积分',
+  freeModel: '免费',
+  badgeLimitedFree: '限时免费',
+  badgeNightDiscount: '夜间折扣',
+  badgeFreeNow: '当前免费',
+  rate: '{rate} 积分/次',
+  rateUnknown: '价格未知 — 刷新后更新',
+  contextUpTo: '最高 {size}',
+  contextDefault: '默认 {size}',
+  contextUnknown: '未声明上下文窗口',
+  visibilityIntro:
+    '取消勾选即可将该模型从选择器中隐藏；按登录账号分别保存，已在用该模型的会话不受影响。',
+  visibilityStaleAccount: '登录账号已切换——本次修改未保存。',
+  probeDetectedCaption: '已检测',
+  probeDetectedUnit: '个模型',
+  probeDetectedNone: '尚未检测',
+  probeListIntro: '部分模型具备思考能力，但没有声明可选档位。',
+  probeCostNote: '检测会向一个模型发送少量真实请求以确认可用档位，可能消耗少量积分。',
+  probeStart: '开始检测',
+  probeRedetect: '重新检测',
+  probeRunning: '正在检测 {model}…',
+  probeClear: '清除结果',
+  probeResultNotValidating: '该模型不校验档位参数',
+  probeResultUnknown: '尚未检测',
+  probeResultDeclaredNone: '上游未声明档位',
+  probeResultAt: '检测于 {time}',
+  probeResultEmpty: '当前没有提供可选档位的推理模型。',
+  probeActionDeclared: '已声明',
+  probeLabel: '推理档位',
+  probePanelLevels: '支持的档位',
+  probePanelNoLevels: '无可选档位',
+  probePanelNote: '检测会向该模型发送若干请求，可能消耗少量积分。',
+  probePanelDetect: '检测',
+  probePanelDetecting: '检测中…',
+  probePanelRedetect: '重新检测',
+  probePanelNotNeeded: '上游已声明档位，无需检测',
+  probePanelNotValidating: '该模型不校验档位参数。',
+  probePanelDeclaredNone: '上游未声明可选档位。',
+  probePanelFailed: '检测未完成，可以再检测一次。',
+  panelCrashed: '{panel}这一块无法显示。',
+  panelRetry: '重试',
+  probeTooltipIdle: '该模型暂无档位，点击可检测',
+  probeTooltipRunning: '正在检测…',
+  probeTooltipLevels: '检测出的档位：{levels}',
+  probeTooltipDeclared: '上游声明的档位：{levels}',
+  probeTooltipNotValidating: '该模型忽略推理档位参数',
+  probeTooltipFailed: '检测未完成 · 点击可再检测一次',
+  authFile: 'WorkBuddy 登录文件',
+  authFileHint: 'WorkBuddy 桌面 App 登录文件的路径。留空表示使用应用自身的位置。',
+  authFileAI: 'WorkBuddy AI 登录文件',
+  authFileAIHint: 'WorkBuddy AI 桌面 App 登录文件的路径。留空表示使用应用自身的位置。',
+  probeConsent: '允许推理档位检测',
+  probeConsentHint:
+    '允许插件向模型发送检测请求，以确认它接受哪些推理档位；每次检测可能消耗少量积分。',
+  maximumContextWindow: '使用上游声明的最大上下文窗口',
+  maximumContextWindowHint: '仅作用于 WorkBuddy AI 中声明了更大窗口的模型。',
+  overridden: '已覆盖',
+  reset: '恢复默认',
+  readOnly: '本部署的设置为只读。',
+  unavailable: '该插件当前未加载，暂时无法配置。',
+  save: '保存',
+  saving: '保存中…',
+  saveFailed: '本部署没有接受这些值，已保留供你修改。',
+  assistantHeading: '让 Agent 帮你处理',
+  assistantIntro: '把下面这段请求发给你的 Agent，它会协助检查应用位置和启动配置。',
+  assistantCopy: '复制给 Agent',
+  assistantCopied: '已复制',
+  assistantCopyFailed: '复制失败，请手动选择上方文字复制',
+  assistantAfter:
+    'Agent 处理完成后，回到这里重新检查；如果修改了 DSH 的启动环境，请先按指引重启 DSH。',
+  assistantRecheck: '已处理，重新检查',
+  assistantRechecking: '正在检查…',
+  assistantPrompt:
+    'DSH 的 dsh-workbuddy-bridge 无法使用我的 {appName}：{failureSummary}。请帮我检查实际安装位置和已有路径配置，让插件能正确使用它，并验证恢复结果；如果需要修改 DSH 的启动环境或重启，请给我明确的操作步骤，不要只在当前 shell 临时设置环境变量。',
+  assistNotFound: '没有找到可用的解密程序',
+  assistAmbiguous: '找到了多个 WorkBuddy 副本，无法安全自动选择',
+  assistIncomplete: '自动定位未能完成',
+  assistPathInvalid: '指定的程序路径不可用',
+  assistUnavailableCN: '当前平台尚未配置解密程序',
+  assistUnavailableAI: '尚未配置 WorkBuddy AI 的解密程序',
+}
+
+/**
+ * The dictionary reader a component takes.
+ *
+ * Narrower than DSH's own `Translate` on purpose: every call site in this
+ * plugin names one of the keys above, so an unknown key is a compile error
+ * rather than a rendered key name.
+ */
+export type WorkBuddyTranslate = (
+  key: WorkBuddyLocaleKey,
+  params?: Record<string, unknown>,
+) => string
+
+/** The form frame's copy, read from this plugin's dictionary. */
+export function formLabels(t: (key: WorkBuddyLocaleKey) => string): SettingsFormLabels {
+  return {
+    unavailable: t('unavailable'),
+    readOnly: t('readOnly'),
+    saveFailed: t('saveFailed'),
+    save: t('save'),
+    saving: t('saving'),
+  }
+}

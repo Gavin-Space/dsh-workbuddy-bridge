@@ -1,0 +1,59 @@
+/*
+ * The remaining-credit readout beside the model picker.
+ *
+ * A coin glyph followed by the figure, and nothing else. It is a plain flex
+ * item of `.standardControls` (`display:flex; align-items:center; gap:12px`),
+ * sitting immediately left of `ModelSelect`'s own root; the slot outlet
+ * contributes no box (`display:contents`), so this element *is* the flex item —
+ * there is no wrapper to style.
+ *
+ * It is a **readout, not a control**: no button, no hover background, no
+ * pointer cursor. The only affordance is the `title`, which spells out what the
+ * number is for anyone who asks; at 28px a sentence would compete with the
+ * figure it labels, which is why the words "剩余" / "remaining" are not here.
+ */
+
+.readout {
+  /*
+   * 28px matches `ModelSelect`'s `.trigger` height and the reasoning-level
+   * button beside it. Without it the row's height is decided by the tallest
+   * child and the picker would sit misaligned with the rest of the chrome.
+   */
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  /*
+   * 4px is measured, not chosen: at 3px the glyph and the digits collided
+   * optically, and at 6px the pair stopped reading as one object and drifted
+   * toward the bulb on their right.
+   */
+  gap: 4px;
+  /* The figure never wraps; a two-line readout would grow the row. */
+  white-space: nowrap;
+  /*
+   * Tertiary tone, like the row's other passive readouts (the clock, the usage
+   * pill) and like the bulb beside it. This is a fact the user reads, not a
+   * control they press, so it must not compete with the model name.
+   */
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The glyph's own rule (`flex: none`) lives with the glyph, in
+   `coin-glyph.module.css`: it is the same object on the card's Credits tab, and
+   that page does not import this stylesheet. */
+
+.amount {
+  /*
+   * One step below the secondary size, matching the sibling labels' caption
+   * tier. `line-height: 1` keeps the readout's own box out of the row's height
+   * calculation.
+   */
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: 1;
+  /*
+   * Digits are compared across models ("what did that one cost me?"), so they
+   * get a tabular figure: proportional digits make a balance change width as it
+   * moves, which reads as a jumpy row.
+   */
+  font-variant-numeric: tabular-nums;
+}

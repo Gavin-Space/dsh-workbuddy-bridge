@@ -1,0 +1,650 @@
+/* WorkBuddy cards and the panels inside them.
+
+   Every value here is taken from the host's own settings surfaces rather than
+   invented, so the page reads as part of the Plugins page instead of as a
+   plugin that styled itself:
+
+   - typography and spacing: `ui-primitives/lib/settings-form/fields.module.css`
+     (label 13/1.5 w500 primary, hint 12/1.5 tertiary, invalid 12/1.5 error).
+   - the card shell is the host's `DisclosureRow`; this file only fills its body.
+   - radius via `--dsw-radius-*`, focus rings via `--dsw-focus-ring-*`.
+
+   Every value below is therefore either a number copied from those files or a
+   `--dsw-*` token; the stylesheet declares no font family, no colour literal,
+   and no line-height outside `1.5` / `1.6`.
+
+   Two conventions worth stating because breaking them is invisible:
+   ① **neutral solid borders are 0.5px**; only state colours keep 1px.
+   ② no literal colour: the palette is `--dsw-alias-*`, so light and dark themes
+      follow from the tokens rather than from a second set of rules.
+   (`--dsw-alias-label-error` is used by the host's own form CSS but is **never
+   defined** — this file uses `--dsw-alias-state-error-primary` instead.) */
+
+/* ---- Configuration page ------------------------------------------------- */
+
+/* The plugin's page: its settings form, then the live cards.
+   The host's `SettingsForm` owns the form's internal rhythm — its footer's
+   `padding-top: 16px` is the form's last word — so this only carries the gap
+   between the two parts. 24px rather than the 12px used *within* a part: the
+   page has exactly one such seam, and it has to read as a change of verb. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The live half's own rhythm. The cards are separate disclosures; 12px is the
+   host's field rhythm — the same one the official voice-input config card spaces
+   every block with (`gap: 12px`, `.preparation { margin: 12px 0 }`). */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A boolean setting. Copied value-for-value from the host's own toggle row
+   (`@deepseek-ai/dsh-client-ui-settings-subagent`'s SubagentModelSelectionCard
+   — the same module `dsh-zhihu-search` cites), so a switch on this page is the
+   same object as a switch anywhere else in Settings. `align-items: flex-start`
+   is theirs, and it is what keeps the switch on the first line when the hint
+   wraps to a second.
+
+   The top rule is unconditional: every one of these rows follows a text field,
+   and those are the host's `SettingsValueField`, which draws a separator only
+   between two of *its* own fields. */
+.toggleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The label block: the setting's name and, when it has one, its hint. */
+.toggleLabel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The hint tier, exactly as the host's `fields.module.css` `.hint`. */
+.toggleHint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- Card body ---------------------------------------------------------- */
+
+/* The body of one card: the sections inside a single disclosure. DisclosureRow
+   supplies the header row, so this is only the vertical rhythm beneath it.
+   The gap separates the account block from the tab bar and the tab panel; the
+   rhythm *inside* a block is `.section`'s business. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 12px;
+}
+
+/*
+ * One block of related facts.
+ *
+ * The rhythm has two tiers, and which one applies is decided by what is being
+ * separated:
+ *
+ * - **Two fields** are separated by the host's 0.5px rule and nothing else
+ *   (`.field + .field` below) — that is the official stack, and adding space
+ *   would break the pair into two blocks.
+ * - **Anything else** gets 12px.
+ *
+ * The `* + *` rule is what an earlier version was missing: it had neither the
+ * generic gap nor a rule, so a paragraph ended up *touching* the bordered list
+ * below it (2026-10-02, reported from a screenshot as "it is stuck to the edge
+ * underneath"). A block that touches its neighbour reads as one object, which is
+ * exactly wrong when one is a list and the other explains it.
+ */
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section > * + * {
+  margin-top: 12px;
+}
+
+/*
+ * The card's action strip: one row, above everything the action covers.
+ *
+ * It exists so the card's single refresh does not read as some block's own
+ * button. Three things say "this is the card's", not "this is that block's":
+ * the row is its own (nothing else shares it), the label names the scope
+ * (`刷新全部`), and the control is the host's `md` — 36px, against the 28px `sm`
+ * every block action uses.
+ *
+ * The action is on the *first* line of the card rather than a footer, because
+ * refreshing is something you do before reading the data below it — the host's
+ * footer position (`SettingsForm`'s `.footer`) is for committing an edit, which
+ * this card never does.
+ */
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Field rows --------------------------------------------------------- */
+
+/*
+ * A field row: at most two lines, and the control rides the first.
+ *
+ *   .field  { flex-direction: column; gap: 6px }        ← 宿主 .field
+ *   .head   { display: flex; align-items: center; gap: 8px }  ← 宿主 .head
+ *   .main   { flex: 1; min-width: 0 }                   ← 宿主 .label 的位置
+ *   .note   { ... }                                     ← 宿主 .hint 的位置
+ *
+ * Both numbers are the host's own (`ui-primitives/lib/settings-form/
+ * fields.module.css`): the 6px is the `.field` gap between its label row and its
+ * hint, the 8px is its `.head` gap. Nothing here is a value this plugin chose.
+ *
+ * **The control is inside the first line, not the block.** That is the host's
+ * `.head` — label and input on one row — and it is why a button never drifts when
+ * the note under it grows: the note is a sibling of `.head`, so its length cannot
+ * move anything on the line above.
+ *
+ * A **lone** field carries no vertical padding of its own: its distance from the
+ * list below is `.section`'s (12px, the host's `.preparation` margin). The host
+ * pads `.field` because its form stacks fields with no container rhythm; ours
+ * has a container, and padding here would double the gap.
+ */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The first line: the main value, then the control at the right edge. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The main value's room. `flex: 1` + `min-width: 0` is the host's `.label`:
+   without the min-width a long value refuses to shrink and pushes the control
+   off the row.
+
+   `baseline`, not `center`: the caption is 12px and the value 13px, so the two
+   boxes have different heights (18px and 19.5px) and centring them puts their
+   baselines 0.35px apart — which the browser rounds, leaving the grey word
+   visibly one pixel off the value beside it (2026-10-03, reported from a
+   screenshot as "粗体的字和灰色的字好像不在一个水平线上"). Baseline alignment
+   makes the offset exactly zero at any size. */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* The control, and only the control. Never text: text and a button on one side
+   compete for the same glance and end up literally adjacent
+   (`…更新于 00:59 刷新模型列表`), which is neither a sentence nor a table. */
+.action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The second line: a grey sentence, or a caption and its value. The gap is the
+   host's `.head` gap; in practice a note holds one `Part`, so it only shows if a
+   fact ever needs two. */
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/*
+ * One line of tiered text: `caption value after`.
+ *
+ * **One font size for the whole line.** That is the invariant, and it is set
+ * here rather than on the two pieces below so it cannot drift: a grey word beside
+ * a value differs only in ink and weight.
+ *
+ * The first version gave the caption the host's `.hint` size (12px) and the value
+ * its `.label` size (13px) — two tiers copied from `fields.module.css`. That made
+ * the two runs unalignable: flex `align-items` aligns *boxes*, and boxes of
+ * different heights share neither baseline nor centre, so the grey word sat a
+ * fraction of a pixel off the value beside it and the browser's subpixel
+ * positioning turned that into a visible step (reported from a screenshot,
+ * 2026-10-03). The maintainer's own instruction was the simpler rule — "不是用同
+ * 一个字体，然后加粗了，同时放在那里就行吗" — and it removes the whole class of
+ * problem instead of compensating for it.
+ *
+ * `inline-flex` keeps a caption with the value it frames, so `有效期至` cannot end
+ * a line while its timestamp starts the next one.
+ */
+.part {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/*
+ * A static word: the frame around a value.
+ *
+ * Grey ink and nothing else — no size of its own, no weight of its own. It
+ * carries no information, so it must not compete with the value it introduces.
+ */
+.caption {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/*
+ * A **dynamic** value: a name, a time, a count — anything the plugin did not
+ * author.
+ *
+ * Primary ink, one weight heavier than the caption, and `tabular-nums` so a value
+ * that ticks or re-reads does not shift the words around it. Those three are the
+ * whole difference; the size comes from `.part`.
+ *
+ * `tabular-nums` is applied to every value rather than only to figures: singling
+ * out the numeric ones would leave two rules where one does, and a name has no
+ * digits to widen.
+ */
+.figure {
+  /* `inline-flex` because a value may be more than one node: the credits block's
+     value is the coin glyph *and* its figure, and the two sit on one optical line. */
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row of actions that belongs to the block above it rather than to one field
+   — a list-wide "clear", a section-wide "refresh". Right-aligned the way the
+   host's action rows are, and separated by the same rule a field uses so it
+   reads as part of the same block. */
+.sectionActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* A section heading. The host's own cards put the label at 13/1.5 w500 primary
+   and describe it as `label-secondary` only in a row header, so a heading over
+   a block of values takes the primary ink and the label tier. */
+.title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The disclosure header row, restated from the official voice-input card's
+   `.summaryRow` / `.summaryTitle` / `.metric`: `height: auto` +
+   `min-height: 28px` lets a wrapped status fit, `flex: 1` on the title pushes
+   the status to the row's right edge, and the status itself is the host's
+   12px hint tier with a live dot. */
+.summaryRow {
+  flex-wrap: wrap;
+  gap: 4px;
+  height: auto;
+  min-height: 28px;
+}
+
+.summaryTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The signed-in line in the header: dot + label, hint-tier ink because it is
+   a fact about the session, not the card's heading. */
+.statusLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+/* Secondary body text. */
+.text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The hint tier: smaller and dimmer than the value it explains. */
+.dim {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* A failed read. Same geometry as .dim so a message replacing a line cannot
+   move the layout, and only its colour changes. */
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---- Credits ------------------------------------------------------------ */
+
+/* One billing package: label row, track, then the exact figure. */
+/* One package: its name and quota on one line, the quota track, then the exact
+   figure. Row geometry matches `.modelRow` and `.probeRow` — padding plus a
+   0.5px rule *between* rows — so all three tabs' lists read as the same object
+   rather than as three plugins' worth of lists. */
+.package {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.package + .package {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* One list row's top line: the package's name on the left, its reading on the
+   right. The size is set here because the two tiers inside carry no size of their
+   own — `.caption` and `.figure` are ink and weight only, so a list row and a
+   field row cannot drift apart. `baseline` for the same reason `.part` uses it. */
+.packageLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The quota track. It is a proportion, not a value, so it takes the neutral
+   border ink rather than a state colour — states are reported by the figure
+   beside it. */
+.track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-border-l3);
+}
+
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dsw-alias-brand-primary);
+}
+
+/* ---- Lists -------------------------------------------------------------- */
+
+/*
+ * A tab panel: **one fixed row on top, one scroll region under it, same height
+ * on every tab.**
+ *
+ * The height is the point. `max-height` on the list alone (the first attempt)
+ * only caps the *tallest* case, so every tab was still content-sized and
+ * switching tabs resized the card — a jolt the eye reads as a layout bug. A
+ * fixed panel height with the list taking `1fr` makes the three tabs
+ * interchangeable boxes: the scroll region absorbs whatever is left after the
+ * header, and the header's own line count is free to differ.
+ *
+ * 380px = the tallest header (a label, a value and two lines of grey detail,
+ * about 88px) + the scroll region's own reach (280px, the host's
+ * settings-subagent `.models`) + the 12px between them. So this is the height
+ * the card already had on its tallest tab — the short tabs grow to match it
+ * rather than the tall one shrinking.
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 380px;
+}
+
+/* Everything but the scroll region keeps its natural size: the header carries
+   the panel's name and its action, and those must never be squeezed to give the
+   list more room. */
+.panel > * {
+  flex: none;
+}
+
+/*
+ * The scroll region of a tab panel — **all three of them, and only one each**;
+ * it takes whatever the header left behind.
+ *
+ * `min-height: 0` is required, not decorative: a flex item defaults to
+ * `min-height: auto`, which refuses to shrink below its content, so the list
+ * would push the panel past its height instead of scrolling inside it.
+ *
+ * The frame is copied from the official `dsh-experimental-client-ui-voice-input`
+ * plugin's configuration card (`.preparation`: 0.5px border-l1, radius 10px,
+ * padding 14px).
+ *
+ * The fixed row sits **above** this, never below: it carries the panel's name
+ * and its action, and an action under a scroll region reads as belonging to
+ * whatever happens to be scrolled to.
+ */
+.list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 14px;
+  overflow: auto;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+}
+
+/* The one child that fills: inside a panel it takes the remaining height. */
+.panel > .list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The list's own legend: what the checkboxes in it mean.
+   Lives inside `.list` (so it scrolls with the rows it explains) and sits at the
+   hint tier with a rule under it, which is what makes it read as the list's
+   header rather than as a paragraph that happens to be nearby. */
+.listHeader {
+  margin: 0;
+  padding: 6px 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* One model: name and badges on the left, capacity or rate on the right.
+   No per-row radius and no per-row padding beyond the vertical rhythm the rule
+   needs: the box above already gives the list its breathing room, and a rule
+   between rows is what makes a long catalog scannable rather than a wall of
+   names (the same choice `.probeRow` makes). */
+.modelRow {
+  display: flex;
+  /* `center`, not `flex-start`: the right column runs to two or three lines
+     (rate, capacity, an alternative window, badges), and top-aligned left the
+     checkbox floating above the name it labels. `.probeRow` centres for the same
+     reason — one card should not align its rows two ways. */
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.modelRow + .modelRow {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.modelMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/*
+ * The host's `Checkbox` carries its own type — `font-size: 14px`,
+ * `line-height: 20px` — which is right for a settings page whose row names are
+ * 14px, and one step too large here, where every other name in the card is 13px
+ * (`settings-subagent`'s list rows: 13 name / 12 hint / 11 metadata).
+ *
+ * Left alone, the same model reads 14px on the Models tab and 13px on the
+ * Detection tab, because that panel renders its name through `.name` instead of
+ * through the checkbox's label.
+ *
+ * Only the type is touched. The glyph stays the primitive's own native input:
+ * redrawing it would make this plugin the one place in Settings with a
+ * hand-built checkbox, and it would lose the keyboard and assistive behaviour
+ * that come with the real control.
+ */
+.modelCheck {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.modelStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The model's own name, at the label tier — the host's list rows set it apart
+   from the metadata a step below. */
+.name {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.modelEnd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  /* Figures stay column-aligned down a list of capacities. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Metadata under a name or beside a figure: one step smaller, tertiary. The
+   host's list rows use exactly this tier for the line under a model name. */
+/* A capacity figure: the hint tier is what the host's own list rows use for
+   the value column, and `tabular-nums` keeps a column of them aligned. */
+.meta {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ---- Probe row ---------------------------------------------------------- */
+
+/*
+ * One reasoning model and its action.
+ *
+ * The rows live inside `.list`, which already frames them, so the separation
+ * here is a rule rather than more padding — the same choice the host's field
+ * stack makes. Without it, a list of twelve models read as twelve unrelated
+ * lines: name, tag and button repeating with nothing tying each triple
+ * together, which is what made the detection tab look like loose rows.
+ */
+.probeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+/*
+ * The rule goes on the *stack*, not the row: each entry is a `modelStack`
+ * wrapping its row plus an optional "detected at" line, so a rule between rows
+ * would separate a row from its own timestamp. This is the boundary the user
+ * reads as "next model".
+ */
+.modelStack + .modelStack {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.probeEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* ---- Agent assist ------------------------------------------------------- */
+
+/* The way out of a failure: the diagnosis stays the headline, this block adds
+   the copyable request and the re-check. It is a distinct surface, so it gets
+   the module fill rather than the page background. */
+.assist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.prompt {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* The request the user copies: an inset well inside .assist. */
+.promptRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px 8px 11px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-3);
+}

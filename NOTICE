@@ -1,0 +1,42 @@
+# dsh-workbuddy-bridge — 来源与版权归属
+
+本仓是 [corrinehu/dsh-workbuddy-connect](https://github.com/corrinehu/dsh-workbuddy-connect) 的重做版本。
+目录结构、命名与提交历史按上游维护者规范重建，代码在原有基础上继续维护。
+
+## 原始作者与版权
+
+- Copyright (c) 2026 Corrine Hu
+- 原始分支与提交：`refactor/official-ui-architecture` @ `3dad637`
+- 原 MIT 许可证与版权声明**完整保留**于 [LICENSE](LICENSE)
+
+## 上游维护者
+
+- Copyright (c) 2026 zlZayn
+- 仓库：<https://github.com/zlZayn/dsh-workbuddy-bridge>
+- 本仓基于其 **v0.4.0** 版本
+
+## 本仓（修改版）维护者
+
+- Copyright (c) 2026 Gavin Space
+- 仓库：<https://github.com/Gavin-Space/dsh-workbuddy-bridge>
+
+## 本仓相对上游 v0.4.0 的改动
+
+改动范围限于 DSH host 半边，用于修复国际版（WorkBuddy AI）在当前服务端下无法发消息的问题：
+
+1. **`src/protocol/international-identity.ts`（新增）** — 国际版聊天请求的会话身份头。
+   上游客户端对该端点有渠道校验，缺失时返回 HTTP 400 / code 11128。头名与形状取自
+   WorkBuddy 桌面 App 内置的官方 CLI（`resources/app.asar.unpacked/cli/dist/codebuddy-lite-wb.mjs`）。
+
+2. **`src/protocol/client.ts`** — `chatStream` 与 `probeEffort` 在国际版分支附加上面的头。
+   国内版请求不变。
+
+3. **`src/protocol/app-version.ts`** — Windows 上从 `resources/install-manifest.json` 的
+   `appVersion` 读国际版真实版本；上游在非 macOS 平台直接回落到内置常量。
+
+4. **`src/credential/at-rest.ts`、`src/credential/store.ts`** — 国际版凭据解密的 Electron
+   二进制按产品区分：国内版 `WorkBuddy.exe`，国际版 `WorkBuddyAI.exe`。上游只认前者，
+   导致国际版要么找不到可执行文件、要么用错产品的密钥。修好后无需设置
+   `WORKBUDDY_ELECTRON_BIN`。
+
+上述改动同样以 MIT 许可发布，与 [LICENSE](LICENSE) 一致。
